@@ -9,7 +9,7 @@ namespace CodingTracker
         static void Main(string[] args)
         {
             DataTools.DataBaseAndConnectionString();
-            MainMenu mainmenu = new();
+            new MainMenu();
         }
     }
 }
