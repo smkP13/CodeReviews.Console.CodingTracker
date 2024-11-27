@@ -11,6 +11,6 @@
         internal int rowid { get; set; }
         internal string? DurationCount { get; set; }
         internal string? TotalDuration { get; set; }
-        internal string? Average { get; set; }
+        internal string? Average { get; set; } 
     }
 }

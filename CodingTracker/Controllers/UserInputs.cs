@@ -48,7 +48,6 @@ namespace CodingTracker.Controllers
 
         public static string GetDurationEstimation()
         {
-            bool validInput = false;
             TimeSpan durationEstimation = new();
             string readResult;
             readResult = AnsiConsole.Prompt(

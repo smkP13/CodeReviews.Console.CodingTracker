@@ -7,7 +7,7 @@ namespace CodingTracker.Views
 {
     internal class DataOutput
     {
-        public static void PrintProjectData(string Project = "test_project", string ascDesc = "Asc", string option = "All data")
+        public static void PrintProjectData(string Project = "test_project", string ascDesc = "Asc", string option = "All data") 
         {
             Table table = new();
             table.Centered();

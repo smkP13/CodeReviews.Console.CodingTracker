@@ -15,7 +15,7 @@ namespace CodingTracker.Controllers
         internal static void DataBaseAndConnectionString()
         {
             try
-            {
+            { 
                 if (ConfigurationManager.AppSettings.Get("connectionString") == "")
                 {
                     string? appFolderPath = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
