@@ -1,5 +1,4 @@
-﻿using CodingTracker.Controllers;
-using CodingTracker.Views;
+﻿using CodingTracker.Views;
 
 namespace CodingTracker
 
@@ -8,7 +7,6 @@ namespace CodingTracker
     {
         static void Main(string[] args)
         {
-            DataTools.DataBaseAndConnectionString();
             new MainMenu();
         }
     }

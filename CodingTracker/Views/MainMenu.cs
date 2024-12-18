@@ -9,7 +9,9 @@ namespace CodingTracker.Views
         private static MenuActions MenuActions { get; set; }
         internal MainMenu()
         {
-            MenuActions = new();
+            DataTools DataTools = new();
+            DataTools.DataBaseAndConnectionString();
+            MenuActions = new(DataTools);
 
             do
             {

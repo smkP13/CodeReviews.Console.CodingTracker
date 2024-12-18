@@ -11,39 +11,39 @@ namespace CodingTracker.Controllers
             string? readResult;
             readResult = AnsiConsole.Prompt(
                 new TextPrompt<string>(message)
-                .Validate(result => result.IndexOfAny(new char[] { '/', '-', '\\', '\'', '"', '(', '[', '{', '?', '!', '&', '>', '<', '=', ',', '.' }) == -1)
+                .Validate(result => result.IndexOfAny(new char[] { '/', '-', '\\', '\'', '"', '(', '[', '{', '?', '!', '&', '>', '<', '=', ',', '.', ' ' }) == -1)
                 .ValidationErrorMessage("[red bold]Invalid input[/] format, please rewrite project name using in a [blue]valid[/] format"));
             return readResult;
         }
 
         public static string GetDateTimeInput(string message, string type = "Date")
         {
-            bool validInput = false;
-            string readResult;
-            do
-            {
-                if (type == "Date")
+                bool validInput = false;
+                string readResult;
+                do
                 {
-                    DateTime dateTime;
-                    readResult = AnsiConsole.Prompt(
-                        new TextPrompt<string>(message)
-                        .Validate(result => result.IndexOfAny(new char[] { '/', '\\', '\'', '"', '(', '[', '{', '?', '!', '&', '>', '<', '=', ',', '_' }) == -1)
-                        .Validate(result => DateTime.TryParseExact(result, "yyyy.MM.dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out dateTime))
-                        .ValidationErrorMessage("[red bold]Invalid input[/] format, please rewrite project name using in a [blue]valid[/] format: [green]yyyy-MM-dd[/]"));
-                    return readResult;
+                    if (type == "Date")
+                    {
+                        DateTime dateTime;
+                        readResult = AnsiConsole.Prompt(
+                            new TextPrompt<string>(message)
+                            .Validate(result => result.IndexOfAny(new char[] { '/', '\\', '\'', '"', '(', '[', '{', '?', '!', '&', '>', '<', '=', ',', '_' }) == -1)
+                            .Validate(result => DateTime.TryParseExact(result, "yyyy.MM.dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out dateTime))
+                            .ValidationErrorMessage("[red bold]Invalid input[/] format, please rewrite date name using a [blue]valid[/] format: [green]yyyy.MM.dd[/]"));
+                        return readResult;
+                    }
+                    else
+                    {
+                        DateTime dateTime;
+                        readResult = AnsiConsole.Prompt(
+                            new TextPrompt<string>(message)
+                            .Validate(result => result.IndexOfAny(new char[] { '/', '\\', '\'', '"', '(', '[', '{', '?', '!', '&', '>', '<', '=', ',', '_' }) == -1)
+                            .Validate(result => DateTime.TryParseExact(result, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out dateTime))
+                            .ValidationErrorMessage("[red bold]Invalid input[/] format, please rewrite time using a [blue]valid[/] format: [green]HH:mm[/]"));
+                        return readResult;
+                    }
                 }
-                else
-                {
-                    DateTime dateTime;
-                    readResult = AnsiConsole.Prompt(
-                        new TextPrompt<string>(message)
-                        .Validate(result => result.IndexOfAny(new char[] { '/', '\\', '\'', '"', '(', '[', '{', '?', '!', '&', '>', '<', '=', ',', '_' }) == -1)
-                        .Validate(result => DateTime.TryParseExact(result, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out dateTime))
-                        .ValidationErrorMessage("[red bold]Invalid input[/] format, please rewrite project name using in a [blue]valid[/] format: [green]HH:mm[/]"));
-                    return readResult;
-                }
-            }
-            while (!validInput);
+                while (!validInput);
         }
 
         public static string GetDurationEstimation()
@@ -54,14 +54,14 @@ namespace CodingTracker.Controllers
                 new TextPrompt<string>("Please enter a time estimation: (d.HH:MM.ss)")
                     .Validate(result => result.IndexOfAny(new char[] { '/', '\\', '\'', '"', '(', '[', '{', '?', '!', '&', '>', '<', '=', ',' }) == -1)
                     .Validate(result => TimeSpan.TryParseExact(result, "c", CultureInfo.InvariantCulture, TimeSpanStyles.None, out durationEstimation))
-                    .ValidationErrorMessage("[red bold]Invalid input[/] format, please rewrite project name using in a [blue]valid[/] format: [green]d.HH:MM:ss[/]"));
+                    .ValidationErrorMessage("[red bold]Invalid input[/] format, please rewrite estimation time using in a [blue]valid[/] format: [green]d.HH:MM:ss[/]"));
             return durationEstimation.ToString();
         }
 
-        public static string SelectExistingProject(bool newProject = false, bool Goal = false)
+        public static string SelectExistingProject(DataTools dataTools, bool newProject = false, bool Goal = false)
         {
             SelectionPrompt<string> prompt = new();
-            List<string> projects = DataTools.GetTables();
+            List<string> projects = dataTools.GetTables();
             prompt.AddChoice("Cancel");
             if (newProject) prompt.AddChoice("Add new Project");
 
@@ -120,7 +120,7 @@ namespace CodingTracker.Controllers
             return null;
         }
 
-        public static List<string> GetMultipeData(List<CodingSession> datas)
+        public static List<CodingSession> GetMultipeData(List<CodingSession> datas)
         {
             try
             {
@@ -137,12 +137,7 @@ namespace CodingTracker.Controllers
                 prompt.Title("Select data(s)");
                 prompt.WrapAround(true);
                 List<CodingSession> selected = AnsiConsole.Prompt(prompt);
-                List<string> selectedDataIds = new();
-                foreach (CodingSession data in selected)
-                {
-                    selectedDataIds.Add(data.rowid.ToString());
-                }
-                if (!selectedDataIds.Contains("0")) return selectedDataIds;
+                if (selected[0].Id != 0) return selected;
             }
             catch (Exception ex) { AnsiConsole.Markup(ex.Message); }
             return null;
@@ -165,6 +160,15 @@ namespace CodingTracker.Controllers
             prompt.Title("Select output order:");
             prompt.AddChoices("Ascendant", "Descendant");
             return AnsiConsole.Prompt(prompt).Substring(0, 3);
+        }
+
+        public static bool CompareDates(CodingSession session)
+        {
+            DateTime start = DateTime.Parse($"{session.StartDate} {session.StartTime}");
+            DateTime end = DateTime.Parse($"{session.EndDate} {session.EndTime}");
+            bool invalidDates = start > end ;
+            if (invalidDates) AnsiConsole.MarkupLine("Start Date/Time [red]greater[/] than End Date/Time.");
+            return invalidDates;
         }
     }
 }

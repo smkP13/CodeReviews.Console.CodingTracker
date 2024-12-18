@@ -7,7 +7,7 @@ namespace CodingTracker.Views
 {
     internal class DataOutput
     {
-        public static void PrintProjectData(string Project = "test_project", string ascDesc = "Asc", string option = "All data") 
+        public static void PrintProjectData(DataTools dataTools, string Project = "test_project", string ascDesc = "Asc", string option = "All data") 
         {
             Table table = new();
             table.Centered();
@@ -18,14 +18,14 @@ namespace CodingTracker.Views
             if (option == "All data")
             {
                 table.AddColumns("Id", "Start Date", "Start Time", "End Date", "End Time", "Duration");
-                projectData = DataTools.GetProjectData(Project, ascDesc);
+                projectData = dataTools.GetProjectData(Project, ascDesc);
                 TimeSpan totalDuration = new();
                 if (projectData != null)
                 {
                     foreach (CodingSession data in projectData)
                     {
                         totalDuration.Add(TimeSpan.ParseExact(data.Duration, "c", CultureInfo.InvariantCulture, TimeSpanStyles.None));
-                        table.AddRow(data.rowid.ToString(), data.StartDate, data.StartTime, data.EndDate, data.EndTime, data.Duration);
+                        table.AddRow(data.Id.ToString(), data.StartDate, data.StartTime, data.EndDate, data.EndTime, data.Duration);
                     }
                     AnsiConsole.Write(table);
                     table = new();
@@ -37,7 +37,7 @@ namespace CodingTracker.Views
             }
             else
             {
-                projectData = DataTools.GetProjectData(Project, ascDesc, option);
+                projectData = dataTools.GetProjectData(Project, ascDesc, option);
                 if (projectData != null)
                 {
                     switch (option)

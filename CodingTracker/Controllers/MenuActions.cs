@@ -8,9 +8,11 @@ namespace CodingTracker.Controllers
     internal class MenuActions
     {
         internal MenuModel MenuModel { get; set; }
+        internal DataTools DataTools { get; set; }
 
-        internal MenuActions()
+        internal MenuActions(DataTools dataTools)
         {
+            DataTools = dataTools;
             MenuModel = new();
             SetMenuModel();
         }
@@ -38,7 +40,8 @@ namespace CodingTracker.Controllers
             MenuModel.EndTime = DateTime.Now.ToString("HH:mm");
             MenuModel.Duration = DataTools.GetDuration(MenuModel.StartDate, MenuModel.StartTime, MenuModel.EndDate, MenuModel.EndTime);
 
-            MenuModel.SqlCommandText = $"INSERT INTO {MenuModel.CurrentCodingSession} (StartDate,EndDate,StartTime,EndTime,Duration) VALUES($startDate,$endDate,$startTime,$endTime,$duration)";
+            MenuModel.SqlCommandText = @$"INSERT INTO {MenuModel.CurrentCodingSession} (Id,StartDate,EndDate,StartTime,EndTime,Duration)
+                                       VALUES((SELECT Ifnull(Max(Id)+1,1) Id FROM {MenuModel.Project}),$startDate,$endDate,$startTime,$endTime,$duration)";
             DataTools.ExecuteQuery(MenuModel.SqlCommandText, startDate: MenuModel.StartDate, endDate: MenuModel.EndDate, startTime: MenuModel.StartTime, endTime: MenuModel.EndTime, duration: MenuModel.Duration);
             
             config.Save(ConfigurationSaveMode.Full);
@@ -50,7 +53,7 @@ namespace CodingTracker.Controllers
             
             if (MenuModel.IsCodingSessionRunning)
             {
-                MenuModel.Project = UserInputs.SelectExistingProject(newProject: true);
+                MenuModel.Project = UserInputs.SelectExistingProject(DataTools,newProject: true);
                 if (MenuModel.Project != null)
                 {
                     if (MenuModel.Project == "Add new Project")
@@ -77,7 +80,7 @@ namespace CodingTracker.Controllers
 
         internal void InsertNewData()
         {
-            MenuModel.Project = UserInputs.SelectExistingProject(newProject: true);
+            MenuModel.Project = UserInputs.SelectExistingProject(DataTools,newProject: true);
             if (MenuModel.Project != null)
             {
                 if (MenuModel.Project == "Add new Project")
@@ -85,30 +88,42 @@ namespace CodingTracker.Controllers
                     MenuModel.Project = UserInputs.GetStringInput("Enter project [blue]name[/] (only [red]letter,numbers and '_'[/] are authorized):");
                     DataTools.CreateNewTable(MenuModel.Project);
                 }
-                MenuModel.StartDate = UserInputs.GetDateTimeInput($"Pease enter a starting date for {MenuModel.Project} (format [green]yyyy.MM.dd[/]):");
-                MenuModel.StartTime = UserInputs.GetDateTimeInput($"Pease enter a starting time for {MenuModel.Project} (format [green]HH:mm[/]):", type: "Time");
-                MenuModel.EndDate = UserInputs.GetDateTimeInput($"Pease enter an ending date for {MenuModel.Project} (format [green]yyyy.MM.dd[/]):");
-                MenuModel.EndTime = UserInputs.GetDateTimeInput($"Pease enter an ending time for {MenuModel.Project} (format [green]HH:mm[/]):", type: "Time");
-                MenuModel.Duration = DataTools.GetDuration(MenuModel.StartDate, MenuModel.StartTime, MenuModel.EndDate, MenuModel.EndTime);
-                MenuModel.SqlCommandText = $"INSERT INTO {MenuModel.Project} (StartDate,EndDate,StartTime,EndTime,Duration) VALUES($startDate,$endDate,$startTime,$endTime,$duration)";
-                DataTools.ExecuteQuery(MenuModel.SqlCommandText, startDate: MenuModel.StartDate, endDate: MenuModel.EndDate, startTime: MenuModel.StartTime, endTime: MenuModel.EndTime, duration: MenuModel.Duration);
+                MenuModel.CurrentData = new();
+                MenuModel.CurrentData.Project = MenuModel.Project;
+                MenuModel.CurrentData.StartDate = UserInputs.GetDateTimeInput($"Pease enter a starting date for {MenuModel.Project} (format [green]yyyy.MM.dd[/]):");
+                MenuModel.CurrentData.StartTime = UserInputs.GetDateTimeInput($"Pease enter a starting time for {MenuModel.Project} (format [green]HH:mm[/]):", type: "Time");
+                
+                bool invalidDates;
+                do {
+                    MenuModel.CurrentData.EndDate = UserInputs.GetDateTimeInput($"Pease enter an ending date for {MenuModel.Project} (format [green]yyyy.MM.dd[/]):");
+                    MenuModel.CurrentData.EndTime = UserInputs.GetDateTimeInput($"Pease enter an ending time for {MenuModel.Project} (format [green]HH:mm[/]):", type: "Time");
+                    invalidDates = UserInputs.CompareDates(MenuModel.CurrentData);
+                } while (invalidDates);
+
+                MenuModel.CurrentData.Duration = DataTools.GetDuration(MenuModel.CurrentData.StartDate, MenuModel.CurrentData.StartTime, MenuModel.CurrentData.EndDate, MenuModel.CurrentData.EndTime);
+                MenuModel.SqlCommandText =  @$"INSERT INTO {MenuModel.Project} (Id,StartDate,EndDate,StartTime,EndTime,Duration)
+                                            VALUES((SELECT Ifnull(Max(Id)+1,1) Id FROM {MenuModel.Project}),$startDate,$endDate,$startTime,$endTime,$duration)";
+                DataTools.ExecuteQuery(MenuModel.SqlCommandText, startDate: MenuModel.CurrentData.StartDate, endDate: MenuModel.CurrentData.EndDate, startTime: MenuModel.CurrentData.StartTime, endTime: MenuModel.CurrentData.EndTime, duration: MenuModel.CurrentData.Duration);
+                MenuModel.CurrentData.Id = DataTools.GetAddedDataId(MenuModel.Project);
+                DataTools.UpdateIds(MenuModel.CurrentData,"insert");
             }
         }
         internal void DeleteData()
         {
-            MenuModel.Project = UserInputs.SelectExistingProject();
+            MenuModel.Project = UserInputs.SelectExistingProject(DataTools);
             if (MenuModel.Project != null)
             {
                 List<CodingSession> projectData = DataTools.GetProjectData(MenuModel.Project);
                 if (projectData != null)
                 {
-                    List<string> selectedDatas = UserInputs.GetMultipeData(projectData);
+                    List<CodingSession> selectedDatas = UserInputs.GetMultipeData(projectData);
                     if (selectedDatas != null)
                     {
-                        foreach (string id in selectedDatas)
+                        foreach (CodingSession session in selectedDatas)
                         {
-                            MenuModel.SqlCommandText = $"DELETE FROM {MenuModel.Project} WHERE rowid = $id";
-                            DataTools.ExecuteQuery(MenuModel.SqlCommandText, id: id);
+                            MenuModel.SqlCommandText = $"DELETE FROM {session.Project} WHERE Id = $id";
+                            DataTools.ExecuteQuery(MenuModel.SqlCommandText, id: session.Id.ToString());
+                            DataTools.UpdateIds(session);
                         }
                     }
                 }
@@ -121,7 +136,7 @@ namespace CodingTracker.Controllers
 
         internal void UpdateData()
         {
-            MenuModel.Project = UserInputs.SelectExistingProject();
+            MenuModel.Project = UserInputs.SelectExistingProject(DataTools);
             if (MenuModel.Project != null)
             {
                 List<CodingSession> projectData = DataTools.GetProjectData(MenuModel.Project);
@@ -130,38 +145,62 @@ namespace CodingTracker.Controllers
                     MenuModel.CurrentData = UserInputs.GetSpecificData(projectData);
                     if (MenuModel.CurrentData != null)
                     {
-                        string dataId = MenuModel.CurrentData.rowid.ToString();
+                        MenuModel.CurrentData.Project = MenuModel.Project;
+                        string dataId = MenuModel.CurrentData.Id.ToString();
                         string dataToModify = AnsiConsole.Prompt(
                             new SelectionPrompt<string>().AddChoices("Start Date", "Start Time", "End Date", "End Time"));
-                        string modifiedData;
+                        bool invalidDates;
                         switch (dataToModify)
                         {
                             case "Start Date":
-                                modifiedData = UserInputs.GetDateTimeInput($"Pease enter a starting date to replace (format [green]yyyy.MM.dd[/]):");
-                                MenuModel.SqlCommandText = $"UPDATE {MenuModel.Project} SET StartDate = $startDate , Duration = $duration WHERE rowid = $id ";
-                                MenuModel.Duration = DataTools.GetDuration(modifiedData, MenuModel.CurrentData.StartTime, MenuModel.CurrentData.EndDate, MenuModel.CurrentData.EndTime);
-                                DataTools.ExecuteQuery(MenuModel.SqlCommandText, startDate: modifiedData, duration: MenuModel.Duration, id: dataId);
+                                string updateIdSetting;
+                                updateIdSetting = MenuModel.CurrentData.StartDate;
+                                do
+                                {
+                                    MenuModel.CurrentData.StartDate = UserInputs.GetDateTimeInput($"Pease enter a starting date to replace (format [green]yyyy.MM.dd[/]):");
+                                    invalidDates = UserInputs.CompareDates(MenuModel.CurrentData);
+                                } while (invalidDates);
+                                MenuModel.SqlCommandText = $"UPDATE {MenuModel.Project} SET StartDate = $startDate , Duration = $duration WHERE Id = $id ";
+                                MenuModel.CurrentData.Duration = DataTools.GetDuration(MenuModel.CurrentData.StartDate, MenuModel.CurrentData.StartTime, MenuModel.CurrentData.EndDate, MenuModel.CurrentData.EndTime);
+                                DataTools.ExecuteQuery(MenuModel.SqlCommandText, startDate: MenuModel.CurrentData.StartDate, duration: MenuModel.CurrentData.Duration, id: dataId);
+                                string updateOption = UpdateIdOption(MenuModel.CurrentData.StartDate, updateIdSetting);
+                                DataTools.UpdateIds(MenuModel.CurrentData,updateOption);
                                 break;
 
                             case "Start Time":
-                                modifiedData = UserInputs.GetDateTimeInput($"Pease enter a starting time to replace (format [green]HH:mm[/]):", type: "Time");
-                                MenuModel.SqlCommandText = $"UPDATE {MenuModel.Project} SET StartTime = $startTime , Duration = $duration WHERE rowid = $id ";
-                                MenuModel.Duration = DataTools.GetDuration(MenuModel.CurrentData.StartDate, modifiedData, MenuModel.CurrentData.EndDate, MenuModel.CurrentData.EndTime);
-                                DataTools.ExecuteQuery(MenuModel.SqlCommandText, startTime: modifiedData, duration: MenuModel.Duration, id: dataId);
+                                updateIdSetting = MenuModel.CurrentData.StartTime;
+                                do
+                                {
+                                    MenuModel.CurrentData.StartTime = UserInputs.GetDateTimeInput($"Pease enter a starting time to replace (format [green]HH:mm[/]):", type: "Time");
+                                    invalidDates = UserInputs.CompareDates(MenuModel.CurrentData);
+                                } while (invalidDates);
+                                MenuModel.SqlCommandText = $"UPDATE {MenuModel.Project} SET StartTime = $startTime , Duration = $duration WHERE Id = $id ";
+                                MenuModel.CurrentData.Duration = DataTools.GetDuration(MenuModel.CurrentData.StartDate, MenuModel.CurrentData.StartTime, MenuModel.CurrentData.EndDate, MenuModel.CurrentData.EndTime);
+                                DataTools.ExecuteQuery(MenuModel.SqlCommandText, startTime: MenuModel.CurrentData.StartTime, duration: MenuModel.CurrentData.Duration, id: dataId);
+                                updateOption = UpdateIdOption(MenuModel.CurrentData.StartTime, updateIdSetting);
+                                DataTools.UpdateIds(MenuModel.CurrentData ,updateOption);
                                 break;
 
                             case "End Date":
-                                modifiedData = UserInputs.GetDateTimeInput($"Pease enter an ending date to replace (format [green]yyyy.MM.dd[/]):");
-                                MenuModel.SqlCommandText = $"UPDATE {MenuModel.Project} SET EndDate = $endDate , Duration = $duration WHERE rowid = $id ";
-                                MenuModel.Duration = DataTools.GetDuration(MenuModel.CurrentData.StartDate, MenuModel.CurrentData.StartTime, modifiedData, MenuModel.CurrentData.EndTime);
-                                DataTools.ExecuteQuery(MenuModel.SqlCommandText, endDate: modifiedData, duration: MenuModel.Duration, id: dataId);
+                                do
+                                {
+                                    MenuModel.CurrentData.EndDate = UserInputs.GetDateTimeInput($"Pease enter an ending date to replace (format [green]yyyy.MM.dd[/]):");
+                                    invalidDates = UserInputs.CompareDates(MenuModel.CurrentData);
+                                } while (invalidDates);
+                                MenuModel.SqlCommandText = $"UPDATE {MenuModel.Project} SET EndDate = $endDate , Duration = $duration WHERE Id = $id ";
+                                MenuModel.CurrentData.Duration = DataTools.GetDuration(MenuModel.CurrentData.StartDate, MenuModel.CurrentData.StartTime, MenuModel.CurrentData.EndDate, MenuModel.CurrentData.EndTime);
+                                DataTools.ExecuteQuery(MenuModel.SqlCommandText, endDate: MenuModel.CurrentData.EndDate, duration: MenuModel.CurrentData.Duration, id: dataId);
                                 break;
 
                             case "End Time":
-                                modifiedData = UserInputs.GetDateTimeInput($"Pease enter an ending time to replace (format [green]HH:mm[/]):", type: "Time");
-                                MenuModel.SqlCommandText = $"UPDATE {MenuModel.Project} SET EndTime = $endTime , Duration = $duration WHERE rowid = $id";
-                                MenuModel.Duration = DataTools.GetDuration(MenuModel.CurrentData.StartDate, MenuModel.CurrentData.StartTime, MenuModel.CurrentData.EndDate, modifiedData);
-                                DataTools.ExecuteQuery(MenuModel.SqlCommandText, endTime: modifiedData, duration: MenuModel.Duration, id: dataId);
+                                do
+                                {
+                                    MenuModel.CurrentData.EndTime = UserInputs.GetDateTimeInput($"Pease enter an ending time to replace (format [green]HH:mm[/]):", type: "Time");
+                                    invalidDates = UserInputs.CompareDates(MenuModel.CurrentData);
+                                } while (invalidDates);
+                                MenuModel.SqlCommandText = $"UPDATE {MenuModel.Project} SET EndTime = $endTime , Duration = $duration WHERE Id = $id";
+                                MenuModel.CurrentData.Duration = DataTools.GetDuration(MenuModel.CurrentData.StartDate, MenuModel.CurrentData.StartTime, MenuModel.CurrentData.EndDate, MenuModel.CurrentData.EndTime);
+                                DataTools.ExecuteQuery(MenuModel.SqlCommandText, endTime: MenuModel.CurrentData.EndTime, duration: MenuModel.CurrentData.Duration, id: dataId);
                                 break;
                         }
                     }
@@ -177,8 +216,8 @@ namespace CodingTracker.Controllers
                 .Title("Choose a type to delete: ")
                 .AddChoices("Normal Project", "Goal Project"));
 
-            if (projectType == "Normal Project") { MenuModel.Project = UserInputs.SelectExistingProject(); }
-            else MenuModel.Project = UserInputs.SelectExistingProject(Goal: true);
+            if (projectType == "Normal Project") { MenuModel.Project = UserInputs.SelectExistingProject(DataTools); }
+            else MenuModel.Project = UserInputs.SelectExistingProject(DataTools, Goal: true);
             
             if (MenuModel.Project != null)
             {
@@ -193,7 +232,7 @@ namespace CodingTracker.Controllers
 
         internal void PrintSingleProjectReport()
         {
-            MenuModel.Project = UserInputs.SelectExistingProject();
+            MenuModel.Project = UserInputs.SelectExistingProject(DataTools);
             if (MenuModel.Project != null)
             {
                 SelectionPrompt<string> prompt = new();
@@ -203,7 +242,7 @@ namespace CodingTracker.Controllers
                 prompt.AddChoices("All data", "Weekly", "Monthly", "Yearly");
                 string option = AnsiConsole.Prompt(prompt);
                 string ascDesc = UserInputs.SelectAscDesc();
-                DataOutput.PrintProjectData(MenuModel.Project, ascDesc, option);
+                DataOutput.PrintProjectData(DataTools,MenuModel.Project, ascDesc, option);
                 Console.ReadKey();
             }
         }
@@ -215,7 +254,7 @@ namespace CodingTracker.Controllers
             AnsiConsole.Clear();
             if (allProjects != null)
             {
-                foreach (string project in allProjects) DataOutput.PrintProjectData(project, ascDesc);
+                foreach (string project in allProjects) DataOutput.PrintProjectData(DataTools,project, ascDesc);
             }
             else
             {
@@ -236,7 +275,7 @@ namespace CodingTracker.Controllers
             }
             else
             {
-                MenuModel.Project = UserInputs.SelectExistingProject(Goal: true);
+                MenuModel.Project = UserInputs.SelectExistingProject(DataTools, Goal: true);
                 if (MenuModel.Project != null) { DataOutput.ShowGoal(DataTools.GetGoalToShow(MenuModel.Project)); }
             }
             Console.ReadKey();
@@ -264,6 +303,23 @@ namespace CodingTracker.Controllers
             bool.TryParse(config1.AppSettings.Settings["newCodingSession"].Value, out isSessionRunning);
             MenuModel.IsCodingSessionRunning = isSessionRunning;
             MenuModel.CurrentCodingSession = config1.AppSettings.Settings["currentCodingSession"].Value;
+        }
+
+        private string UpdateIdOption(string sessionDateTime, string dateTime,string option = "date")
+        {
+            DateTime newDateTime = DateTime.Parse(dateTime);
+            if(option == "date")
+            {
+                if (DateTime.Parse(sessionDateTime) > newDateTime)
+                { return "updateUp"; }
+                else return "updateDown";
+            }
+            else
+            {
+                if (DateTime.Parse(sessionDateTime) > newDateTime)
+                { return "updateUp"; }
+                else return "updateDown";
+            }
         }
     }
 }
