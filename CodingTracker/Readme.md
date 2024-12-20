@@ -57,27 +57,39 @@ This methodollogy might take more effort at first sight, but I found that it rea
 ## The project structure
 
 The user navigate through a simple console based UI named contained in MainMenu.
+
 Each menu is subdivided in different options to complete different tasks:
+
 	- Start/End new coding session:
 		Start/End a coding session using the current date and time
+
 	- Insert new data:
 		Allows to add data to a project or add a new project
+
 	- Delete data:
 		Allows to delete datas selected in a list
+
 	- Update data:
 		Allows to update start/end date/time for a specific data
+
 	- Delete project:
 		Allows to delete a project and all its data
+
 	- Print single project data:
 		Prints diverse reports for a specific project ordered by date
+
 	- Print all data:
 		Prints every single session of every project ordered by date
+
 	- Set/Show coding goals
 		Allows to create coding time goals to achieve
+
 	- See current session duration:
 		See the duration of the current session (new coding session)
+
 	- Exit:
 		Exit the program
+
 	- Fill database for testing purpose:
 		Fill the database with a table named test_table with values to test with
 
@@ -132,7 +144,7 @@ I learned how to protect the program from some Sql Injections, but I can't tell 
 - Increase confidence in my capacity to learn and apply code
 
 
-## Ressources
+### Ressources
 
 - https://www.sqlite.org/
 - https://www.sqlitetutorial.net/
@@ -142,8 +154,8 @@ I learned how to protect the program from some Sql Injections, but I can't tell 
 - My precendent projects and personal projects and their ressources
 
 
-## Thanks
+### Thanks
 
-- Hason23 for the advises and the correction
+- Hason23 for the advises and the corrections
 - thecsharpacademy for everything they give to us
 - All the developper helping newcomers for free

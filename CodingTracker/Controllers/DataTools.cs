@@ -12,7 +12,7 @@ namespace CodingTracker.Controllers
     {
         internal string? ConnectionString { get; set; }
 
-        internal void DataBaseAndConnectionString()
+        internal void Initialize()
         {
             try
             { 
@@ -41,11 +41,17 @@ namespace CodingTracker.Controllers
                 CodingSession currentData = new();
                 List<CodingSession> reports = new();
                 string[] dateStr = GetOppositeDates(project);
+                if (dateStr[0] != null)
+                {
+                    dateStr[0] = $"{dateStr[0].Substring(0, 10)} 23:59:59";
+                    dateStr[1] = $"{dateStr[1].Substring(0, 10)} 00:00:00";
+                }
+                else return null;
                 DateTime firstDate;
-                DateTime LastDate;
+                DateTime lastDate;
 
-                bool haveData = DateTime.TryParseExact(dateStr[0], "yyyy.MM.dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out firstDate);
-                haveData = DateTime.TryParseExact(dateStr[1], "yyyy.MM.dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out LastDate);
+                bool haveData = DateTime.TryParseExact(dateStr[0], "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture, DateTimeStyles.None, out firstDate);
+                haveData = DateTime.TryParseExact(dateStr[1], "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture, DateTimeStyles.None, out lastDate);
                 DateTime secondDate = firstDate;
                 DateTime currentDate = firstDate;
                 if (option == "All data")
@@ -54,12 +60,23 @@ namespace CodingTracker.Controllers
                     {
                         try
                         {
-                            sqlCommand = $"SELECT * from {project} ORDER BY StartDate";
+                            sqlCommand = $"SELECT * from {project} ";
                             using (SqliteConnection connection = new(ConnectionString))
                             {
-                                reports = ascDesc == "Asc" ? connection.Query<CodingSession>(sqlCommand).ToList() : ReverseList(connection.Query<CodingSession>(sqlCommand).ToList());
-                                foreach(CodingSession session in reports) { session.Project = project; };
-                                return reports;
+                                IDataReader reader = connection.ExecuteReader(sqlCommand);
+                                while (reader.Read())
+                                {
+                                    reports.Add(new CodingSession
+                                    {
+                                        Id = int.Parse(reader["Id"].ToString()),
+                                        Start = DateTime.Parse(reader["Start"].ToString()),
+                                        End = DateTime.Parse(reader["End"].ToString()),
+                                        Duration = TimeSpan.Parse(reader["Duration"].ToString()),
+                                        Project = project
+                                    });
+                                }
+                                reader.Close();
+                                return ascDesc == "Asc" ? reports : ReverseList(reports);
                             }
                         }
                         catch (Exception ex)
@@ -67,18 +84,19 @@ namespace CodingTracker.Controllers
                             return null;
                         }
                     }
+                    else return null;
                 }
                 else if (option == "Weekly")
                 {
                     secondDate = firstDate.DayOfWeek.ToString() switch
                     {
-                        "Monday" => firstDate,
-                        "Tuesday" => firstDate.AddDays(-1),
-                        "Wednesday" => firstDate.AddDays(-2),
-                        "Thursday" => firstDate.AddDays(-3),
-                        "Friday" => firstDate.AddDays(-4),
-                        "Saturday" => firstDate.AddDays(-5),
-                        "Sunday" => firstDate.AddDays(-6),
+                        "Monday" => firstDate.AddDays(-1).AddSeconds(1),
+                        "Tuesday" => firstDate.AddDays(-2).AddSeconds(1),
+                        "Wednesday" => firstDate.AddDays(-3).AddSeconds(1),
+                        "Thursday" => firstDate.AddDays(-4).AddSeconds(1),
+                        "Friday" => firstDate.AddDays(-5).AddSeconds(1),
+                        "Saturday" => firstDate.AddDays(-6).AddSeconds(1),
+                        "Sunday" => firstDate.AddDays(-7).AddSeconds(1),
                         _ => firstDate,
                     };
                 }
@@ -93,7 +111,6 @@ namespace CodingTracker.Controllers
                     {
                         using (SqliteConnection connection = new(ConnectionString))
                         {
-                            // SQLite command to calculate the duration using only SQLite
                             sqlCommand = @$"SELECT 	
                                          printf('%.2i',(avg(strftime('%M', Duration)) / 60 + avg(strftime('%H', Duration))) % 24) as avgHours,
 	                                     printf('%.2i',avg(strftime('%M',Duration))) as avgMinutes,
@@ -101,23 +118,24 @@ namespace CodingTracker.Controllers
 	                                     printf('%.2i',sum(strftime('%M', Duration)) / 60 + sum(strftime('%H', Duration))) % 24 as hours,
                                          printf('%.2i', sum(strftime('%M', Duration)) % 60) as minutes,
                                          count(Duration) as DurationCount
-                                         FROM {project} WHERE StartDate <= '{currentDate.ToString("yyyy.MM.dd")}' AND StartDate >= '{secondDate.ToString("yyyy.MM.dd")}'";
+                                         FROM {project} WHERE Start <= '{currentDate.ToString("yyyy-MM-dd HH:mm:ss")}' AND Start >= '{secondDate.ToString("yyyy-MM-dd HH:mm:ss")}'";
                             currentData = connection.Query<CodingSession>(sqlCommand).ToList()[0];
                             currentData.Project = project;
                             IDataReader reader = connection.ExecuteReader(sqlCommand);
                             reader.Read();
                             currentData.TotalDuration = $"{reader["days"]:D2}.{reader["hours"]:D2}:{reader["minutes"]:D2}:00";
+                            currentData.DurationCount = int.Parse(reader["DurationCount"].ToString());
                             reader.Close();
-                            if (currentData.DurationCount != "0")
+                            if (currentData.DurationCount != 0)
                             {
-                                currentData.StartDate = secondDate.ToString("yyyy.MM.dd");
-                                currentData.EndDate = currentDate.ToString("yyyy.MM.dd");
-                                sessionCount += int.Parse(currentData.DurationCount);
+                                currentData.Start = secondDate;
+                                currentData.End = currentDate;
+                                sessionCount += currentData.DurationCount;
                                 finalDuration = finalDuration.Add(TimeSpan.ParseExact(currentData.TotalDuration, "c", CultureInfo.InvariantCulture, TimeSpanStyles.None));
                                 reports.Add(currentData);
                             }
 
-                            currentDate = secondDate.AddDays(-1);
+                            currentDate = secondDate.AddSeconds(-1);
                             secondDate = option switch
                             {
                                 "Weekly" => secondDate.AddDays(-7),
@@ -126,15 +144,15 @@ namespace CodingTracker.Controllers
                             };
                         }
 
-                        if (currentDate < LastDate)
+                        if (currentDate < lastDate)
                         {
                             reports.Add(new CodingSession
                             {
                                 Project = "Final Result",
-                                StartDate = firstDate.ToString("yyyy.MM.dd"),
-                                EndDate = LastDate.ToString("yyyy.MM.dd"),
+                                Start = firstDate,
+                                End = lastDate,
                                 TotalDuration = finalDuration.ToString(),
-                                DurationCount = sessionCount.ToString(),
+                                DurationCount = sessionCount,
                                 Average = (finalDuration / sessionCount).ToString().Substring(0, 5),
                             });
                             return ascDesc == "Asc" ? reports : ReverseList(reports, false);
@@ -162,7 +180,7 @@ namespace CodingTracker.Controllers
                 using (SqliteConnection connection = new(ConnectionString))
                 {
                     string? sqlCommand;
-                    sqlCommand = $"CREATE TABLE IF NOT EXISTS \"{project}_CGoal\"(Project TEXT,Start DATE,End DATE,DurationEstimation TIME,DurationPerDay TIME,NumberOfDays INTEGER)";
+                    sqlCommand = $"CREATE TABLE IF NOT EXISTS \"{project}_CGoal\" (Project TEXT,Start DATE,End DATE,DurationEstimation TIME,DurationPerDay TIME,NumberOfDays INTEGER)";
                     ExecuteQuery(sqlCommand);
                     sqlCommand = $"SELECT * FROM {project}_CGoal";
                     IDataReader reader = connection.ExecuteReader(sqlCommand);
@@ -170,17 +188,17 @@ namespace CodingTracker.Controllers
                     reader.Close();
                     if (goalNotSet)
                     {
-                        string start = UserInputs.GetDateTimeInput("Choose a starting date");
-                        string end;
+                        DateTime start = DateTime.Parse(UserInputs.GetDateTimeInput("Choose a starting date"));
+                        DateTime end;
                         do
                         {
-                            end = UserInputs.GetDateTimeInput("Choose an ending date");
-                        } while (DateTime.Parse(start) < DateTime.Parse(end));
+                            end = DateTime.Parse(UserInputs.GetDateTimeInput("Choose an ending date"));
+                        } while (start > end);
                         string durationEstimation = UserInputs.GetDurationEstimation();
-                        int days = GetNumberOfDays(start, end);
+                        int days = GetNumberOfDays(start.ToString("yyyy.MM.dd"), end.ToString("yyyy.MM.dd"));
                         TimeSpan timePerDay = TimeSpan.ParseExact(durationEstimation, "c", CultureInfo.InvariantCulture, TimeSpanStyles.None);
                         timePerDay = timePerDay / days;
-                        sqlCommand = $"INSERT INTO {project}_CGoal (Project,Start,End,DurationEstimation,DurationPerDay,NumberOfDays) VALUES('{project}','{start}','{end}','{durationEstimation}','{timePerDay}',{days})";
+                        sqlCommand = $"INSERT INTO {project}_CGoal (Project,Start,End,DurationEstimation,DurationPerDay,NumberOfDays) VALUES('{project}','{start.ToString("yyyy-MM-dd")}','{end.ToString("yyyy-MM-dd")}','{durationEstimation}','{timePerDay}',{days})";
                         ExecuteQuery(sqlCommand);
                     }
                     else
@@ -209,10 +227,10 @@ namespace CodingTracker.Controllers
                     CodingSession session = new CodingSession
                     {
                         Project = project,
-                        StartDate = reader["Start"].ToString(),
-                        EndDate = reader["End"].ToString(),
+                        Start = DateTime.Parse(reader["Start"].ToString()),
+                        End = DateTime.Parse(reader["End"].ToString()),
                         TotalDuration = reader["DurationEstimation"].ToString(),
-                        Duration = reader["DurationPerDay"].ToString()
+                        Duration = TimeSpan.Parse(reader["DurationPerDay"].ToString())
                     };
                     reader.Close();
                     return session;
@@ -226,13 +244,23 @@ namespace CodingTracker.Controllers
             }
         }
 
-        public string GetDuration(string StartDate, string StartTime, string EndDate, string EndTime)
+        public string GetCurrentSessionDuration(string StartDate, string StartTime, string EndDate, string EndTime)
         {
 
             DateTime start = DateTime.Parse($"{StartDate} {StartTime}");
             DateTime end = DateTime.Parse($"{EndDate} {EndTime}");
             string duration = end.Subtract(start).ToString();
             return duration.Substring(0, duration.Length - 3);
+        }
+
+        internal TimeSpan GetDuration (DateTime start,DateTime end)
+        {
+            // The string conversion and parse is made to always have a format of d.HH:mm:ss
+            TimeSpan duration = end.Subtract(start);
+            string durationString = duration.ToString();
+            durationString = durationString.Substring(0,8).Contains('.') ? durationString.Substring(0,10) : durationString.Substring(0,8);
+            duration = TimeSpan.Parse(durationString);
+            return duration;
         }
 
         public int GetNumberOfDays(string Start, string End)
@@ -265,8 +293,8 @@ namespace CodingTracker.Controllers
         {
             using (SqliteConnection connection = new(ConnectionString))
             {
-                string sqlCommand = $"CREATE TABLE IF NOT EXISTS \"{project}\" (Id INTEGER PRIMARY KEY,StartDate DATE,StartTime DATETIME,EndDate DATE,EndTime DATETIME,Duration TIME) WITHOUT ROWID";
-                connection.Query(sqlCommand);
+                string sqlCommand2 = $"CREATE TABLE IF NOT EXISTS \"{project}\" (Id INTEGER PRIMARY KEY,Start TEXT,End TEXT,Duration TEXT) WITHOUT ROWID;"; 
+                connection.Query(sqlCommand2);
             }
         }
 
@@ -274,10 +302,10 @@ namespace CodingTracker.Controllers
         {
             using (SqliteConnection connection = new(ConnectionString))
             {
-                string sqlCommand = $"SELECT MAX(StartDate) FROM {project}";
+                string sqlCommand = $"SELECT MAX(Start) FROM {project}";
                 List<string> firstDate = connection.Query<string>(sqlCommand).ToList();
 
-                sqlCommand = $"SELECT MIN(StartDate) FROM {project}";
+                sqlCommand = $"SELECT MIN(Start) FROM {project}";
                 List<string> lastDate = connection.Query<string>(sqlCommand).ToList();
                 return [firstDate[0], lastDate[0]];
             }
@@ -297,14 +325,14 @@ namespace CodingTracker.Controllers
             return list;
         }
 
-        public void ExecuteQuery(string sqlCommand, string startDate = "", string endDate = "", string startTime = "", string endTime = "", string duration = "", string id = "")
+        public void ExecuteQuery(string sqlCommand, string startDate = "", string endDate = "", string startTime = "", string endTime = "", string duration = "", string id = "",string start = "", string end = "")
         {
             try
             {
                 using (SqliteConnection connection = new(ConnectionString))
                 {
                     connection.Query(sqlCommand,
-                        new { id, startDate, startTime, endDate, endTime, duration });
+                        new { id, startDate, startTime, endDate, endTime, duration, start, end });
                 }
             }
             catch (Exception ex)
@@ -331,11 +359,9 @@ namespace CodingTracker.Controllers
                     {
                         for (int i = 1; i < 51; i++)
                         {
-                            sqlCommand = "INSERT INTO test_table (Id,StartDate,EndDate,StartTime,EndTime,Duration) VALUES($id,$startDate,$endDate,$startTime,$endTime,$duration)";
-                            string duration = GetDuration(startDate.ToString("yyyy.MM.dd"), startDate.ToString("HH:mm"),
-                                date.ToString("yyyy.MM.dd"), date.ToString("HH:mm"));
-                            ExecuteQuery(sqlCommand, startDate.ToString("yyyy.MM.dd"), date.ToString("yyyy.MM.dd"),
-                                startDate.ToString("HH:mm"), date.ToString("HH:mm"), duration,i.ToString());
+                            sqlCommand = "INSERT INTO test_table (Id,Start,End,Duration) VALUES($id,$start,$end,$duration);";
+                            TimeSpan Duration = GetDuration(startDate, date);
+                            ExecuteQuery(sqlCommand, start: startDate.ToString("yyyy-MM-dd HH:mm:ss"),end: date.ToString("yyyy-MM-dd HH:mm:ss"),duration:Duration.ToString(),id:i.ToString());
                             startDate = startDate.AddDays(1);
                             date = date.AddDays(1);
                         }
@@ -355,32 +381,28 @@ namespace CodingTracker.Controllers
             if (option == "insert")
             {
                 sqlCommand = $@"ALTER TABLE {session.Project} ADD COLUMN tempoId;
-                
-                                UPDATE {session.Project} SET tempoId = Id + 1 WHERE Id < (SELECT MAX(Id) from {session.Project}) AND (StartDate > $startDate OR (StartDate = $startDate AND StartTime > $startTime));
-                                
-                                UPDATE {session.Project} SET Id = Id + (SELECT MAX(Id) from {session.Project}) WHERE tempoID IS NOT NULL;
-                                
-                                UPDATE {session.Project} SET Id = (SELECT ifnull(MIN(tempoId) - 1,$id) from {session.Project}) WHERE Id = $id;
-                                
+                                UPDATE {session.Project} SET tempoId = Id + 1 WHERE Start > $start;
+                                UPDATE {session.Project} SET Id = Id + (SELECT MAX(Id) from {session.Project}) WHERE tempoId IS NOT NULL;
+                                UPDATE {session.Project} SET Id = (SELECT ifnull(Min(tempoId)-1,Id) FROM {session.Project}) WHERE Id = $id;
                                 UPDATE {session.Project} SET Id = tempoId WHERE tempoId IS NOT NULL;
-                                
                                 ALTER TABLE {session.Project} DROP COLUMN tempoId;";
             }
-            else if (option == "updateUP")
+            else if (option == "updateUp")
             {
                 sqlCommand = $@"ALTER TABLE {session.Project} ADD COLUMN tempoId;
-                                UPDATE {session.Project} SET tempoId = Id + 1,Id = Id +(SELECT MAX(Id) FROM {session.Project}) WHERE Id < $id AND StartDate >= $startDate AND StartTime > $startTime;
-                                UPDATE {session.Project} SET Id = (SELECT MIN(tempoId) - 1 FROM {session.Project} WHERE tempoId IS NOT NULL) WHERE Id = $id;
-                                UPDATE {session.Project} SET Id = tempoId WHERE tempoId is NOT NULL;
+                                UPDATE {session.Project} SET tempoId = Id + 1 WHERE Start > $start AND Id < $id;
+                                UPDATE {session.Project} SET Id = Id + (SELECT MAX(Id) from {session.Project}) WHERE tempoId IS NOT NULL;
+                                UPDATE {session.Project} SET Id = (SELECT ifnull(Min(tempoId)-1,$id) FROM {session.Project} WHERE tempoId IS NOT NULL) WHERE Id = $id;
+                                UPDATE {session.Project} SET Id = IIF((SELECT Min(tempoId)-1 FROM {session.Project}) = {session.Id},tempoId-1,tempoId) WHERE tempoId is NOT NULL;
                                 ALTER TABLE {session.Project} DROP COLUMN tempoId;";
             }
-            else if(option == "updateDown")
+            else if (option == "updateDown")
             {
                 sqlCommand = $@"ALTER TABLE {session.Project} ADD COLUMN tempoId;
-                                
-                                UPDATE {session.Project} SET tempoId = Id - 1,Id = Id +(SELECT MAX(Id) FROM {session.Project}) WHERE Id > $id AND StartDate <= $startDate AND StartTime < $startTime;
-                                UPDATE {session.Project} SET Id = (SELECT MAX(tempoId) + 1 FROM {session.Project} WHERE tempoId IS NOT NULL) WHERE Id = $id;
-                                UPDATE {session.Project} SET Id = tempoId WHERE tempoId is NOT NULL;
+                                UPDATE {session.Project} SET tempoId = Id - 1 WHERE Start < $start AND Id > $id;
+                                UPDATE {session.Project} SET Id = Id + (SELECT MAX(Id) from {session.Project}) WHERE tempoId IS NOT NULL;
+                                UPDATE {session.Project} SET Id = (SELECT ifnull(MAX(tempoId)+1,$id) FROM {session.Project} WHERE tempoId IS NOT NULL) WHERE Id = $id;
+                                UPDATE {session.Project} SET Id = IIF((SELECT Max(tempoId)+1 FROM {session.Project}) = {session.Id},tempoId+1,tempoId) WHERE tempoId is NOT NULL;
                                 ALTER TABLE {session.Project} DROP COLUMN tempoId;";
             }
             else
@@ -391,8 +413,8 @@ namespace CodingTracker.Controllers
                                    UPDATE {session.Project} SET Id = tempoId WHERE Id > $id;
                                    ALTER TABLE {session.Project} DROP COLUMN tempoId;";
             }
-            ExecuteQuery(sqlCommand,id: session.Id.ToString(),startDate:session.StartDate,startTime:session.StartTime);
-            
+            ExecuteQuery(sqlCommand, id: session.Id.ToString(), start: session.Start.ToString("yyyy-MM-dd HH:mm:ss"));
+
         }
 
         internal int GetAddedDataId(string project)

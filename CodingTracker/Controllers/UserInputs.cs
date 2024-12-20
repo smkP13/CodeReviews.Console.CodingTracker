@@ -98,11 +98,11 @@ namespace CodingTracker.Controllers
                 SelectionPrompt<CodingSession> prompt = new();
                 if (datas != null)
                 {
-                    prompt.AddChoice(new CodingSession { StartDate = "Cancel" });
+                    prompt.AddChoice(new CodingSession { Average = "Cancel" });
                     foreach (CodingSession data in datas)
                     {
                         prompt.AddChoice(data);
-                        prompt.Converter = data => $"{data.StartDate} {data.StartTime} | {data.EndDate} {data.EndTime} | {data.Duration}";
+                        prompt.Converter = data => $"{data.Start} | {data.End} | {data.Duration}{data.Average}";
                     }
                 }
                 prompt.Title("Select a Data:");
@@ -110,7 +110,7 @@ namespace CodingTracker.Controllers
                 CodingSession selected = AnsiConsole.Prompt(
                     prompt
                     );
-                if (selected.StartDate != "Cancel") return selected;
+                if (selected.Average != "Cancel") return selected;
             }
             catch (Exception ex)
             {
@@ -127,11 +127,11 @@ namespace CodingTracker.Controllers
                 MultiSelectionPrompt<CodingSession> prompt = new();
                 if (datas != null)
                 {
-                    prompt.AddChoice(new CodingSession { StartDate = "Cancel" });
+                    prompt.AddChoice(new CodingSession { Average = "Cancel" });
                     foreach (CodingSession data in datas)
                     {
                         prompt.AddChoice(data);
-                        prompt.Converter = data => $"{data.StartDate} {data.StartTime} | {data.EndDate} {data.EndTime} | {data.Duration}";
+                        prompt.Converter = data => $"{data.Start} {data.End} | {data.Duration}{data.Average}";
                     }
                 }
                 prompt.Title("Select data(s)");
@@ -164,9 +164,7 @@ namespace CodingTracker.Controllers
 
         public static bool CompareDates(CodingSession session)
         {
-            DateTime start = DateTime.Parse($"{session.StartDate} {session.StartTime}");
-            DateTime end = DateTime.Parse($"{session.EndDate} {session.EndTime}");
-            bool invalidDates = start > end ;
+            bool invalidDates = session.Start > session.End ;
             if (invalidDates) AnsiConsole.MarkupLine("Start Date/Time [red]greater[/] than End Date/Time.");
             return invalidDates;
         }

@@ -1,7 +1,6 @@
 ﻿using CodingTracker.Controllers;
 using CodingTracker.Models;
 using Spectre.Console;
-using System.Globalization;
 
 namespace CodingTracker.Views
 {
@@ -24,14 +23,22 @@ namespace CodingTracker.Views
                 {
                     foreach (CodingSession data in projectData)
                     {
-                        totalDuration.Add(TimeSpan.ParseExact(data.Duration, "c", CultureInfo.InvariantCulture, TimeSpanStyles.None));
-                        table.AddRow(data.Id.ToString(), data.StartDate, data.StartTime, data.EndDate, data.EndTime, data.Duration);
+                        totalDuration.Add(data.Duration);
+                        table.AddRow(data.Id.ToString(), data.Start.ToString("yyyy.MM.dd"), data.Start.ToString("HH:mm:ss"), data.End.ToString("yyyy.MM.dd"), data.End.ToString("HH:mm:ss"), data.Duration.ToString());
                     }
                     AnsiConsole.Write(table);
                     table = new();
                     table.Centered();
                     table.AddColumns("First Session", "Last Session", "Total session", "Total Duration");
 
+                    Console.WriteLine();
+                }
+                else
+                {
+                    table = new();
+                    table.Centered();
+                    table.AddColumn($"{Project} data is empty");
+                    AnsiConsole.Write(table);
                     Console.WriteLine();
                 }
             }
@@ -52,13 +59,13 @@ namespace CodingTracker.Views
                                     table = new();
                                     table.Centered();
                                     table.AddColumns("First session", "Last session", "Total session n°", "Final duration", "Average Duration");
-                                    table.AddRow(data.EndDate.Substring(0, 10), data.StartDate.Substring(0, 10), data.DurationCount, data.TotalDuration, data.Average);
+                                    table.AddRow(data.End.Year.ToString(), data.Start.Year.ToString(), data.DurationCount.ToString(), data.TotalDuration, data.Average);
                                     AnsiConsole.Write(table);
                                 }
                                 else
                                 {
-                                    table.AddRow(data.StartDate.Substring(0, 4), data.StartDate.Substring(5, 2),
-                                    data.StartDate, data.EndDate, data.DurationCount, data.TotalDuration);
+                                    table.AddRow(data.Start.Year.ToString(), data.Start.Month.ToString(),
+                                    data.Start.ToString("yyyy.MM.dd"), data.End.ToString("yyyy.MM.dd"), data.DurationCount.ToString(), data.TotalDuration);
                                 }
                             }
                             Console.WriteLine();
@@ -75,12 +82,12 @@ namespace CodingTracker.Views
                                     table = new();
                                     table.Centered();
                                     table.AddColumns("First session", "Last session", "Total session n°", "Final duration", "Average Duration");
-                                    table.AddRow(data.EndDate.Substring(0, 10), data.StartDate.Substring(0, 10), data.DurationCount, data.TotalDuration, data.Average);
+                                    table.AddRow(data.End.ToString("yyyy.MM.dd"), data.Start.ToString("yyyy.MM.dd"), data.DurationCount.ToString(), data.TotalDuration, data.Average);
                                     AnsiConsole.Write(table);
                                 }
                                 else
                                 {
-                                    table.AddRow(data.StartDate.Substring(0, 4), data.StartDate.Substring(5, 2), data.DurationCount, data.TotalDuration);
+                                    table.AddRow(data.Start.Year.ToString(), data.Start.Month.ToString(), data.DurationCount.ToString(), data.TotalDuration);
                                 }
                             }
                             Console.WriteLine();
@@ -96,12 +103,12 @@ namespace CodingTracker.Views
                                     table = new();
                                     table.Centered();
                                     table.AddColumns("First session", "Last session", "Total session n°", "Final duration", "Average Duration");
-                                    table.AddRow(data.EndDate.Substring(0, 10), data.StartDate.Substring(0, 10), data.DurationCount, data.TotalDuration, data.Average);
+                                    table.AddRow(data.End.ToString("yyyy.MM.dd"), data.Start.ToString("yyyy.MM.dd"), data.DurationCount.ToString(), data.TotalDuration, data.Average);
                                     AnsiConsole.Write(table);
                                 }
                                 else
                                 {
-                                    table.AddRow(data.StartDate.Substring(0, 4), data.DurationCount, data.TotalDuration);
+                                    table.AddRow(data.Start.Year.ToString(), data.DurationCount.ToString(), data.TotalDuration);
                                 }
                             }
                             Console.WriteLine();
@@ -124,7 +131,7 @@ namespace CodingTracker.Views
                     Table table = new Table();
                     table.Centered();
                     table.AddColumns("Project", "Start", "End", "Estimate time", "Estimate time per day");
-                    table.AddRow(session.Project, session.StartDate, session.EndDate, session.TotalDuration, session.Duration);
+                    table.AddRow(session.Project, session.Start.ToString("yyyy.MM.dd"), session.End.ToString("yyyy.MM.dd"), session.TotalDuration, session.Duration.ToString());
                     AnsiConsole.Write(table);
                 }
                 else

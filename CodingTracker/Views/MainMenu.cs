@@ -10,7 +10,7 @@ namespace CodingTracker.Views
         internal MainMenu()
         {
             DataTools DataTools = new();
-            DataTools.DataBaseAndConnectionString();
+            DataTools.Initialize();
             MenuActions = new(DataTools);
 
             do
